@@ -1,5 +1,4 @@
 
-
 const und = undefined;
 
 
@@ -286,17 +285,39 @@ function Angle(a, yaw, pitch, roll)
         return a
         
     }
+
     this.ToRadians = function()
     {
-        this.yaw = degree * Math.PI / 180.0;
-        this.pitch = degree * Math.PI / 180.0;
-        this.roll = degree * Math.PI / 180.0;
+        this.yaw = this.yaw * Math.PI / 180.0;
+        this.pitch = this.pitch * Math.PI / 180.0;
+        this.roll = this.roll * Math.PI / 180.0;
     }
 }
 
 
+Entity.GetPlayerOrigin = function(player)
+{
+    return new Vector(Entity.GetProp(player, "CBaseEntity", "m_vecOrigin"))
+}
 
 
+Entity.GetLocalOrigin = function()
+{
+    return GetPlayerOrigin(Entity.GetLocalPlayer())
+}
+
+//
+Entity.GetVelocity = function(player)
+{
+    return new Vector( Entity.GetProp( player, "CBasePlayer", "m_vecVelocity[0]" ));
+
+
+}
+
+Entity.GetLocalVelocity = function()
+{
+    return Entity.GetVelocity(Entity.GetLocalPlayer());
+}
 
 //Call in cm
 //Returns the movement vector of the local player
@@ -322,30 +343,19 @@ UserCMD.GetMovementVector = function()
 
 UserCMD.MoveToPoint = function(point)
 {
-
-    localplayerPos = GetLocalOrigin();
+    const threshold = 10
+    localplayerPos = Entity.GetLocalOrigin();
     var vecToPeek = point.Sub(localplayerPos);
     vecToPeek.y = 0
 	var angle = Math.atan2(vecToPeek.z, vecToPeek.x) * (180 / Math.PI);;
 	var viewYaw = Local.GetViewAngles()[1] - 180;
 	var realAngle = (AdjustAngle(angle - viewYaw) + 90) * (Math.PI / 180);
 	var distance = vecToPeek.Length();
-    UserCMD.SetMovement([Math.cos(realAngle) * (distance < 20 ? 50 + distance * 5 : 450), Math.sin(realAngle) * (distance < 20 ? 50 + distance * 5 : 450), 0]);
+    UserCMD.SetMovement([Math.cos(realAngle) * (distance < threshold ? 50 + distance * 5 : 450), Math.sin(realAngle) * (distance < threshold ? 50 + distance * 5 : 450), 0]);
     return distance;
 }
 
-//
-Entity.GetVelocity = function(player)
-{
-    return new Vector( Entity.GetProp( player, "CBasePlayer", "m_vecVelocity[0]" ));
 
-
-}
-
-Entity.GetLocalVelocity = function()
-{
-    return Entity.GetVelocity(Entity.GetLocalPlayer());
-}
 
 //Internal implementation function, try not to use it 
 Entity.GetAcceleration = function(movedir, currentVel, wishSpeed, player)
@@ -414,7 +424,7 @@ Entity.PredictNextVel = function(curVel, moveVec, player)
 }
 
 //Wrapper for the above function
-Entity.PredictNextLocalVel() = function()
+Entity.PredictNextLocalVel = function()
 {
     var lp = Entity.GetLocalPlayer()
     var curVel = Entity.GetLocalVelocity()
@@ -422,6 +432,7 @@ Entity.PredictNextLocalVel() = function()
 
     return Entity.PredictNextVel(curVel, moveVec, lp);
 }
+
 
 
 //Render utils
@@ -455,5 +466,7 @@ Render.Filled3DCircle = function(position, radius, degrees, start_at, color, fil
     }
 }
 
-
-
+function print(v)
+{
+    Cheat.Print(v.toString() + "\n")
+}
