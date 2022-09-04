@@ -3,6 +3,10 @@
 const und = undefined;
 
 
+const tps = 64
+//sdk uses frametime but this is a cm func so it can be constant
+const frametime_fixed = 1/tps
+
 //UI WRAPPERS
 const SLIDERINT =     0;
 const SLIDERFLOAT =   1;
@@ -127,10 +131,6 @@ function UIElement(path, name, type, val1, val2)
 
 
 
-
-
-
-
 //Vectors and angles
 function Vector(a, x, y, z)
 {
@@ -185,15 +185,20 @@ function Vector(a, x, y, z)
     }
     this.GetNormalized = function()
     {
-        var length = this.Length();
-        return new Vector(und, this.x / length, this.y / length, this.z / length);
+        var v = this.Copy()
+        v.Normalize(n)
+        return v
     }
     this.Normalize = function()
     {
         var length = this.Length();
-        this.x = this.x / length;
-        this.y = this.y / length;
-        this.z = this.z / length;
+        if(length > 0)
+        {
+            this.x = this.x / length;
+            this.y = this.y / length;
+            this.z = this.z / length;
+        }
+        
     }
     this.Add = function(v)
     {
@@ -218,12 +223,13 @@ function Vector(a, x, y, z)
 
 }
 
-function Angles(a, yaw, pitch, roll)
+
+function Angle(a, yaw, pitch, roll)
 {
 
-        this.yaw = yaw;
-        this.pitch = pitch;
-        this.roll = roll;
+    this.yaw = yaw;
+    this.pitch = pitch;
+    this.roll = roll;
     
     if(a != undefined)
     {
@@ -232,16 +238,21 @@ function Angles(a, yaw, pitch, roll)
         this.roll = a[2];
 
     }
+
+    this.Copy = function()
+    {
+        return new Angle(und, this.yaw, this.pitch, this.roll)
+    }
         
     
     this.GetArr = function()
     {
-       
         return [this.pitch,this.yaw,this.roll];
     }
     this.ToVec = function()
     {
-        return new Vector(und, Math.cos(DEG2RAD(this.pitch)) * Math.cos(DEG2RAD(this.yaw)),  -Math.sin(DEG2RAD(this.pitch)), Math.cos(DEG2RAD(this.pitch)) * Math.sin(DEG2RAD(this.yaw)));
+        var a = this.GetRadians()
+        return new Vector(und, Math.cos(a.pitch) * Math.cos(a.yaw),  -Math.sin(a.pitch), Math.cos(a.pitch) * Math.sin(a.yaw));
     }
 
 /*
@@ -260,31 +271,56 @@ function Angles(a, yaw, pitch, roll)
         cy = Math.cos(this.yaw)
         cp = Math.cos(this.pitch)
         cr = Math.cos(this.roll)
+
+        var forward = new Vector(und, cp * cy, -sp, cp * sy)
+        //shit just got real
+        var right = new Vector(und, (-1*sr*sp*cy+-1*cr*-sy),    -1*sr*cp,   (-1*sr*sp*sy+-1*cr*cy))
+        var up = new Vector(und,    (cr*sp*cy+-sr*-sy),         cr*cp,      (cr*sp*sy+-sr*cy) )
+        return [forward, right, up];
+    }
+
+    this.GetRadians = function()
+    {
+        var a = this.Copy()
+        a.ToRadians()
+        return a
+        
+    }
+    this.ToRadians = function()
+    {
+        this.yaw = degree * Math.PI / 180.0;
+        this.pitch = degree * Math.PI / 180.0;
+        this.roll = degree * Math.PI / 180.0;
     }
 }
 
-function ExtrapolatedTimeToPoint()
+
+
+
+
+//Call in cm
+//Returns the movement vector of the local player
+UserCMD.GetMovementVector = function()
 {
+
+	var viewAng = new Angle(Local.GetViewAngles());
+    var vecs = viewAng.ToVectors()
+    var fwd = vecs[0], right = vecs[1], up = vecs[2];
+    var movecmd = new Vector(UserCMD.GetMovement())
+    fwd.Scale(movecmd.x);
+    right.Scale(movecmd.z);
+    up.Scale(movecmd.y)
+
+    var moveVec = new Vector([0,0,0])
+    moveVec.x = fwd.x + right.x
+    moveVec.z = fwd.z + right.z
+    //moveVec.y = fwd.y + right.y + up.y
     
+    return moveVec
 }
 
-function GetDropdownValue(value, index)
-{
-    var mask = 1 << index;
-    return value & mask ? true : false;
-}
 
-function ANGLE2VEC(angle) 
-{
-	var pitch = angle[0];
-	var yaw = angle[1];
-	return [Math.cos(DEG2RAD(pitch)) * Math.cos(DEG2RAD(yaw)), Math.cos(DEG2RAD(pitch)) * Math.sin(DEG2RAD(yaw)), -Math.sin(DEG2RAD(pitch))];
-}
-function DEG2RAD(degree)
-{
-    return degree * Math.PI / 180.0;
-}
-function MoveToPoint(point)
+UserCMD.MoveToPoint = function(point)
 {
 
     localplayerPos = GetLocalOrigin();
@@ -297,3 +333,132 @@ function MoveToPoint(point)
     UserCMD.SetMovement([Math.cos(realAngle) * (distance < 20 ? 50 + distance * 5 : 450), Math.sin(realAngle) * (distance < 20 ? 50 + distance * 5 : 450), 0]);
     return distance;
 }
+
+//
+Entity.GetVelocity = function(player)
+{
+    return new Vector( Entity.GetProp( player, "CBasePlayer", "m_vecVelocity[0]" ));
+
+
+}
+
+Entity.GetLocalVelocity = function()
+{
+    return Entity.GetVelocity(Entity.GetLocalPlayer());
+}
+
+//Internal implementation function, try not to use it 
+Entity.GetAcceleration = function(movedir, currentVel, wishSpeed, player)
+{
+
+    var accel = Convar.GetFloat("sv_accelerate");
+    var veer = movedir.Dot(currentVel);
+    var friction = Entity.GetProp( player, "CBasePlayer", "m_flFriction" )
+
+
+    var addspeed = wishSpeed - veer;
+    if (addspeed <= 0)
+    {
+        return new Vector([0,0,0]);
+    }
+
+    // Determine amount of accleration.
+    //accelspeed = accel * gpGlobals->frametime * wishspeed * player->m_surfaceFriction;
+
+    var accelSpeed = accel * frametime_fixed * wishSpeed * friction;
+    // Cap at addspeed
+	if (accelSpeed > addspeed)
+    {
+        accelSpeed = addspeed;
+    }
+
+    var accelV = movedir.GetScaled(accelSpeed);
+    
+    return accelV
+    
+}
+
+
+/*
+    curVel: current velocity
+    moveVec: movement vector(NOT UserCMD.GetMovement() also related to it, see UserCMD.GetMovementVector())
+    player: entity index of the player, shouldn't be relevant but adding as an arg anyway
+    Returns velocity of next tick
+*/
+Entity.PredictNextVel = function(curVel, moveVec, player)
+{
+    var maxSpeed = Entity.GetProp( player, "CBasePlayer", "m_flMaxspeed" )
+    //var moveVec = GetMovementVector();
+
+    var moveDir = moveVec.GetNormalized();
+
+    var speed = moveVec.Length()
+
+    //clamping, useless but here for consistency
+    //actually nvm its not useless
+    if(speed > maxSpeed)
+    {
+        speed = maxSpeed
+    }
+    var resV = curVel.Add(Entity.GetAcceleration(moveDir, curVel, speed, player))
+
+    //clamp velocity vec to max speed
+    if(resV.Length() > maxSpeed)
+    {
+        resV.Normalize()
+        resV.Scale(maxSpeed)
+    }
+
+    return resV;
+    
+}
+
+//Wrapper for the above function
+Entity.PredictNextLocalVel() = function()
+{
+    var lp = Entity.GetLocalPlayer()
+    var curVel = Entity.GetLocalVelocity()
+    var moveVec = UserCMD.GetMovementVector()
+
+    return Entity.PredictNextVel(curVel, moveVec, lp);
+}
+
+
+//Render utils
+
+//position, radius, color, fill_color: self explanatory
+ //degrees: circle span(can be used to make half circles too, but use 360 for full circle)
+//start_at: start span at x degrees
+Render.Filled3DCircle = function(position, radius, degrees, start_at, color, fill_color) 
+{
+
+    var old_x, old_y;
+
+    //clamp degrees between 360 and 0
+    degrees = degrees < 361 && degrees || 360; 
+    degrees = degrees > -1 && degrees || 0;
+    start_at += 1;
+
+    for (rot = start_at; rot < degrees + start_at + 1; rot += start_at * 8) {
+        rot_r = rot * (Math.PI / 180);
+        line_x = radius * Math.cos(rot_r) + position[0], line_y = radius * Math.sin(rot_r) + position[1];
+
+        var curr = Render.WorldToScreen([line_x, line_y, position[2]]);
+        var cur = Render.WorldToScreen([position[0], position[1], position[2]]);
+
+        if (cur[0] != null && curr[0] != null && old_x != null) {
+            Render.Polygon([[curr[0], curr[1]], [old_x, old_y], [cur[0], cur[1]]], fill_color)
+            Render.Line(curr[0], curr[1], old_x, old_y, color)
+        }
+
+        old_x = curr[0], old_y = curr[1];
+    }
+}
+
+
+
+
+
+
+
+function
