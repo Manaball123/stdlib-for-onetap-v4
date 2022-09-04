@@ -1,8 +1,7 @@
 
-
 const und = undefined;
 
-
+const __DEBUG__ = true
 const tps = 64
 //sdk uses frametime but this is a cm func so it can be constant
 const frametime_fixed = 1/tps
@@ -320,6 +319,9 @@ Entity.GetLocalVelocity = function()
     return Entity.GetVelocity(Entity.GetLocalPlayer());
 }
 
+
+
+
 //Call in cm
 //Returns the movement vector of the local player
 UserCMD.GetMovementVector = function()
@@ -353,7 +355,7 @@ UserCMD.MoveToPoint = function(point)
     
         return angle;
     }
-    const threshold = 10
+    const threshold = 20
     localplayerPos = Entity.GetLocalOrigin();
     var vecToPeek = point.Sub(localplayerPos);
     vecToPeek.y = 0
@@ -434,10 +436,14 @@ Entity.PredictNextVel = function(curVel, moveVec, player)
 }
 
 //Wrapper for the above function
-Entity.PredictNextLocalVel = function()
+Entity.PredictNextLocalVel = function(curVel)
 {
+    if(curVel == und)
+    {
+        curVel = Entity.GetLocalVelocity()
+    }
     var lp = Entity.GetLocalPlayer()
-    var curVel = Entity.GetLocalVelocity()
+    
     var moveVec = UserCMD.GetMovementVector()
 
     return Entity.PredictNextVel(curVel, moveVec, lp);
@@ -478,6 +484,9 @@ Render.Filled3DCircle = function(position, radius, degrees, start_at, color, fil
 
 function print(v)
 {
-    Cheat.Print(v.toString() + "\n")
+    if(__DEBUG__)
+    {
+        Cheat.Print(v.toString() + "\n")
+    }
+    
 }
-peekPoint = new Vector([0,0,0])
