@@ -457,8 +457,3 @@ Render.Filled3DCircle = function(position, radius, degrees, start_at, color, fil
 
 
 
-
-
-
-
-function
