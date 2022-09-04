@@ -1,4 +1,5 @@
 
+
 const und = undefined;
 
 
@@ -185,7 +186,7 @@ function Vector(a, x, y, z)
     this.GetNormalized = function()
     {
         var v = this.Copy()
-        v.Normalize(n)
+        v.Normalize()
         return v
     }
     this.Normalize = function()
@@ -303,7 +304,7 @@ Entity.GetPlayerOrigin = function(player)
 
 Entity.GetLocalOrigin = function()
 {
-    return GetPlayerOrigin(Entity.GetLocalPlayer())
+    return Entity.GetPlayerOrigin(Entity.GetLocalPlayer())
 }
 
 //
@@ -343,6 +344,15 @@ UserCMD.GetMovementVector = function()
 
 UserCMD.MoveToPoint = function(point)
 {
+    function AdjustAngle(angle) {
+        if (angle < 0) {
+            angle = (90 + angle * (-1));
+        } else if (angle > 0) {
+            angle = (90 - angle);
+        }
+    
+        return angle;
+    }
     const threshold = 10
     localplayerPos = Entity.GetLocalOrigin();
     var vecToPeek = point.Sub(localplayerPos);
@@ -470,3 +480,4 @@ function print(v)
 {
     Cheat.Print(v.toString() + "\n")
 }
+peekPoint = new Vector([0,0,0])
